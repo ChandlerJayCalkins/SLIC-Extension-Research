@@ -39,9 +39,10 @@ cv::Mat visualizeSuperpixels(const cv::Mat& image, const cv::Mat& labels, const 
     cv::cvtColor(image, viz, cv::COLOR_GRAY2BGR);
     
     // Create color map for each superpixel
-    int num_superpixels = 0;
-    cv::minMaxLoc(labels, nullptr, reinterpret_cast<double*>(&num_superpixels));
-    num_superpixels++;
+    double min_label = 0.0;
+    double max_label = 0.0;
+    cv::minMaxLoc(labels, &min_label, &max_label);
+    int num_superpixels = static_cast<int>(max_label) + 1;
     
     std::vector<cv::Vec3b> colors(num_superpixels);
     for (int i = 0; i < num_superpixels; ++i) {
@@ -182,8 +183,10 @@ bool processImage(const fs::path& input_path, const fs::path& output_dir) {
     
     for (int region_size : region_sizes) {
         std::cout << "\n  Region size: " << region_size << " pixels\n";
-        
-        ltridp::LTriDPSuperpixelSLIC slic(enhanced, features, region_size, 10.0f);
+
+        const float compactness_ratio = 1.0f;  // keep m/S constant across region sizes
+        float ruler = compactness_ratio * static_cast<float>(region_size);
+        ltridp::LTriDPSuperpixelSLIC slic(enhanced, features, region_size, ruler);
         
         // Run 10 iterations
         slic.iterate(10);
@@ -191,22 +194,32 @@ bool processImage(const fs::path& input_path, const fs::path& output_dir) {
         int num_superpixels = slic.getNumberOfSuperpixels();
         std::cout << "    Number of superpixels: " << num_superpixels << "\n";
         
-        // Get labels and boundaries
-        cv::Mat labels, boundaries;
+        // Get labels (pre-connectivity)
+        cv::Mat labels;
         slic.getLabels(labels);
-        slic.getLabelContourMask(boundaries);
         
         // Enforce connectivity
-        slic.enforceLabelConnectivity(25);
+        slic.enforceLabelConnectivity(25);      
         int final_superpixels = slic.getNumberOfSuperpixels();
         std::cout << "    After connectivity: " << final_superpixels << " superpixels\n";
         
-        // Get updated labels after connectivity
+        // Get updated labels and boundaries after connectivity enforcement
         slic.getLabels(labels);
+        cv::Mat boundaries;
+        slic.getLabelContourMask(boundaries);
         
         // Create visualizations
         cv::Mat superpixel_viz = visualizeSuperpixels(enhanced, labels, boundaries);
         cv::Mat comparison_grid = createComparisonGrid(original, enhanced, features, superpixel_viz);
+
+        // Overlay boundaries on the original and enhanced images for export
+        cv::Mat boundary_overlay;
+        cv::cvtColor(original, boundary_overlay, cv::COLOR_GRAY2BGR);
+        cv::Mat enhanced_boundary_overlay;
+        cv::cvtColor(enhanced, enhanced_boundary_overlay, cv::COLOR_GRAY2BGR);
+        const cv::Scalar boundary_color(255, 255, 255);  // white overlays
+        boundary_overlay.setTo(boundary_color, boundaries);
+        enhanced_boundary_overlay.setTo(boundary_color, boundaries);
         
         // Calculate superpixel statistics
         int boundary_pixels = cv::countNonZero(boundaries);
@@ -222,6 +235,7 @@ bool processImage(const fs::path& input_path, const fs::path& output_dir) {
         
         fs::path labels_path = output_dir / (base_name + size_suffix + "_labels.png");
         fs::path boundaries_path = output_dir / (base_name + size_suffix + "_boundaries.png");
+        fs::path enhanced_boundaries_path = output_dir / (base_name + size_suffix + "_boundaries_enhanced.png");
         fs::path viz_path = output_dir / (base_name + size_suffix + "_superpixels.png");
         fs::path grid_path = output_dir / (base_name + size_suffix + "_pipeline.png");
         
@@ -231,7 +245,8 @@ bool processImage(const fs::path& input_path, const fs::path& output_dir) {
         cv::applyColorMap(labels_viz, labels_viz, cv::COLORMAP_JET);
         
         cv::imwrite(labels_path.string(), labels_viz);
-        cv::imwrite(boundaries_path.string(), boundaries);
+        cv::imwrite(boundaries_path.string(), boundary_overlay);
+        cv::imwrite(enhanced_boundaries_path.string(), enhanced_boundary_overlay);
         cv::imwrite(viz_path.string(), superpixel_viz);
         cv::imwrite(grid_path.string(), comparison_grid);
         
