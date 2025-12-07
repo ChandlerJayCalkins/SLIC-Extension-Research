@@ -84,23 +84,37 @@ int main(int argc, char* argv[])
 
 	const int avg_superpixel_size = 100; // Default: 100
 	const float smoothness = 100.0f; // Default: 10.0
+	const int iterations = 10; // Default: 10
 	const int min_superpixel_size_percent = 4;
-	// Ptr<ximgproc::SuperpixelSLIC> slic = ximgproc::createSuperpixelSLIC(input_image, ximgproc::SLIC, avg_superpixel_size, smoothness);
-	Ptr<SuperpixelSLIC> slic = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
-	slic->iterate(1);
-	slic->enforceLabelConnectivity(min_superpixel_size_percent);
 
-	show_superpixels(slic, input_image, window_name);
-	
-	// 50.0 good for aguilles_rogues, 32.0 good for cosmo
-	slic->duperizeWithAverage(30.0);
-	// const int num_buckets[] = {16, 16, 16};
-	// slic->duperizeWithHistogram(num_buckets, 2.0f);
+	// Generate superpixels to show average-duperizing
+	Ptr<SuperpixelSLIC> slic_1 = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
+	slic_1->iterate(iterations);
+	slic_1->enforceLabelConnectivity(min_superpixel_size_percent);
+	// Generate superpixels to show histogram-duperizing
+	Ptr<SuperpixelSLIC> slic_2 = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
+	slic_2->iterate(iterations);
+	slic_2->enforceLabelConnectivity(min_superpixel_size_percent);
 
-	Mat output = show_superpixels(slic, input_image, window_name);
+	// Display superpixels
+	show_superpixels(slic_1, input_image, window_name);
 	
+	// Higher values means superpixels are more likely to be similar enough to be grouped
+	// Lower values means superpixels are less likely to be similar enough to be grouped
+	slic_1->duperizeWithAverage(20.0);
+	// Display superpixels
+	Mat average_output = show_superpixels(slic_1, input_image, window_name);
 	// Write output to an image file
-	imwrite("output.png", output);
+	imwrite("average_output.png", average_output);
+	
+	// More buckets means superpixels are less likely to be similar enough to be grouped
+	// Less buckets means superpixels are more likely to be similar enough to be grouped
+	const int num_buckets[] = {4, 32, 32};
+	slic_2->duperizeWithHistogram(num_buckets, 1.5f);
+	// Display superpixels
+	Mat histogram_output = show_superpixels(slic_2, input_image, window_name);// Write output to an image file
+	imwrite("histogram_output.png", histogram_output);
+	
 
 	return 0;
 }
