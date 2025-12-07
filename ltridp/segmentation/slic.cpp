@@ -234,6 +234,13 @@ void LTriDPSuperpixelSLIC::performLTriDPSLIC(int num_iterations)
     // Standard SLIC: xywt = (S/m)²
     const float xywt = (static_cast<float>(m_region_size) / m_ruler) * 
                        (static_cast<float>(m_region_size) / m_ruler);
+
+    // Normalization constants keep each distance term comparable
+    constexpr float gray_range = 255.0f;
+    constexpr float texture_range = 255.0f;
+    const float inv_gray_range_sq = 1.0f / (gray_range * gray_range);
+    const float inv_texture_range_sq = 1.0f / (texture_range * texture_range);
+    constexpr float texture_weight = 0.6f;  // balances texture vs. intensity
     
     // Main iteration loop
     for (int itr = 0; itr < num_iterations; itr++) {
@@ -264,13 +271,16 @@ void LTriDPSuperpixelSLIC::performLTriDPSLIC(int num_iterations)
                     float pixel_gray = static_cast<float>(m_image.at<uchar>(y, x));
                     float pixel_tex = static_cast<float>(m_texture.at<uchar>(y, x));  // ADDED: texture pixel value
                     
-                    // Gray distance component
+
+
+                    // Gray distance component (normalized)
+                    (add normalization to distance measurement)
                     float dc = pixel_gray - center_gray;
-                    dc = dc * dc;  // squared difference
+                    dc = (dc * dc) * inv_gray_range_sq;
                     
-                    // Texture distance component 
-                    float dt = pixel_tex - center_tex;                       // ADDED: texture distance
-                    dt = dt * dt;  // squared difference                     // ADDED: texture distance
+                    // Texture distance component (normalized)
+                    float dt = pixel_tex - center_tex;
+                    dt = (dt * dt) * inv_texture_range_sq;
                     
                     // Spatial distance component
                     float dx_diff = static_cast<float>(x) - center_x;
@@ -292,7 +302,7 @@ void LTriDPSuperpixelSLIC::performLTriDPSLIC(int num_iterations)
                     // D = (dc + dt) + ds/xywt
                     // where xywt = (S/m)² provides compactness control
                     
-                    float dist = dc + dt + ds / xywt;
+                    float dist = dc + texture_weight * dt + ds / xywt;
                     
                     // Assign to nearest cluster
                     if (dist < distvec.at<float>(y, x)) {
