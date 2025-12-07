@@ -1199,6 +1199,7 @@ void SuperpixelSLICImpl::groupSuperpixels
 		{
 			superduperpixels.push_back(SuperDuperPixel(superpixel, average_colors, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
+			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
 	}
 }
@@ -1265,6 +1266,7 @@ void SuperpixelSLICImpl::groupSuperpixels
 		{
 			superduperpixels.push_back(SuperDuperPixel(superpixel, color_histogram, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
+			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
 	}
 }

@@ -82,9 +82,9 @@ int main(int argc, char* argv[])
 	const String window_name = "Superpixels";
 	namedWindow(window_name);
 
-	const int avg_superpixel_size = 100; // Default: 100
+	const int avg_superpixel_size = 25; // Default: 100
 	const float smoothness = 100.0f; // Default: 10.0
-	const int iterations = 10; // Default: 10
+	const int iterations = 1; // Default: 10
 	const int min_superpixel_size_percent = 4;
 
 	// Generate superpixels to show average-duperizing
@@ -109,8 +109,8 @@ int main(int argc, char* argv[])
 	
 	// More buckets means superpixels are less likely to be similar enough to be grouped
 	// Less buckets means superpixels are more likely to be similar enough to be grouped
-	const int num_buckets[] = {4, 32, 32};
-	slic_2->duperizeWithHistogram(num_buckets, 1.5f);
+	const int num_buckets[] = {8, 64, 64};
+	slic_2->duperizeWithHistogram(num_buckets, 2.0f);
 	// Display superpixels
 	Mat histogram_output = show_superpixels(slic_2, input_image, window_name);// Write output to an image file
 	imwrite("histogram_output.png", histogram_output);
