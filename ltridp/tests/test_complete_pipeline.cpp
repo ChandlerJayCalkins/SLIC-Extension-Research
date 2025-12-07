@@ -3,14 +3,13 @@
  * @brief End-to-end test of the complete LTriDP superpixel segmentation pipeline
  * 
  * @author Ketsia Mbaku
- * @date November 30, 2025
  * 
  * This program demonstrates the complete pipeline:
  * 1. Preprocessing (3D histogram reconstruction + gamma transformation)
  * 2. Feature Extraction (LTriDP texture descriptor)
  * 3. Superpixel Segmentation (LTriDP-enhanced SLIC)
  * 
- * Usage: ./test_complete_pipeline <input_mri_directory> <output_directory>
+ * Usage: ./test_complete_pipeline ../data/input ../data/output
  */
 
 #include "preprocessing.hpp"
