@@ -44,9 +44,6 @@
 */.vscode
 .vscode
 
-# Processed output images only (allow sample inputs)
-ltridp/data/output/
-
 # README files in ltridp (right now README are a bit scrappy for my own reference. will add later)
 ltridp/**/README.md
 

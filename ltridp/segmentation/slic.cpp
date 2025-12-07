@@ -271,10 +271,8 @@ void LTriDPSuperpixelSLIC::performLTriDPSLIC(int num_iterations)
                     float pixel_gray = static_cast<float>(m_image.at<uchar>(y, x));
                     float pixel_tex = static_cast<float>(m_texture.at<uchar>(y, x));  // ADDED: texture pixel value
                     
-
-
                     // Gray distance component (normalized)
-                    (add normalization to distance measurement)
+                    // Add normalization to distance measurement
                     float dc = pixel_gray - center_gray;
                     dc = (dc * dc) * inv_gray_range_sq;
                     
