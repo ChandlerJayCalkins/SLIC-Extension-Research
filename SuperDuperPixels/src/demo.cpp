@@ -75,6 +75,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	// Convert the image from RGB color space to CIELAB color space (strictly following SLIC algorithm)
 	Mat cielab_image;
 	cvtColor(input_image, cielab_image, COLOR_RGB2Lab);
 
