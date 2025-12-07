@@ -28,7 +28,7 @@ using namespace cv;
 // A file called output.jpg should be in the project folder.
 int main(int argc, char* argv[])
 {
-	int input_count = 10;
+	int input_count = 4;
 	// naming scheme: input0, input1,...inputN
 	// loop through and hash each one
 
@@ -110,100 +110,107 @@ int main(int argc, char* argv[])
 		// // Write output to an image file
 		// imwrite("output.png", output);
 	}
+	std::string qbase = "query";
+	int q_count = 4;
 
-	// load query image
-	Mat query_image = imread("query4.jpg");
+	for (int i = 0; i < q_count; i++) {
+		std::string num = std::to_string(i);
+		std::string q_file_name = qbase + num + ext;
+		// load query image
+		Mat query_image = imread(q_file_name);
 
-	// generate superpixels for query image
-	Ptr<ximgproc::SuperpixelSLIC> query_slic = ximgproc::createSuperpixelSLIC(query_image, ximgproc::SLIC, avg_superpixel_size, smoothness);
-	query_slic->iterate();
-	query_slic->enforceLabelConnectivity(min_superpixel_size_percent);
+		// generate superpixels for query image
+		Ptr<ximgproc::SuperpixelSLIC> query_slic = ximgproc::createSuperpixelSLIC(query_image, ximgproc::SLIC, avg_superpixel_size, smoothness);
+		query_slic->iterate();
+		query_slic->enforceLabelConnectivity(min_superpixel_size_percent);
 
-	Mat query_labels;
-	query_slic->getLabels(query_labels);
-	int query_superpixel_count = query_slic->getNumberOfSuperpixels();
+		Mat query_labels;
+		query_slic->getLabels(query_labels);
+		int query_superpixel_count = query_slic->getNumberOfSuperpixels();
 
-	// count pixels in each query superpixel
-	unsigned long* query_pixel_count = (unsigned long*) calloc(query_superpixel_count, sizeof(unsigned long));
-	for (int row = 0; row < query_labels.rows; row += 1) {
-		for (int col = 0; col < query_labels.cols; col += 1) {
-			query_pixel_count[query_labels.at<int>(row, col)] += 1;
-		}
-	}
-
-	// build HashKey structs for query superpixels
-	HashKey *query_superpixels = (HashKey*) calloc(query_superpixel_count, sizeof(HashKey));
-	for (int row = 0; row < query_labels.rows; row++) {
-		for (int col = 0; col < query_labels.cols; col++) {
-			cv::Vec3b lab_pixel = query_image.at<cv::Vec3b>(row, col); // using BGR as LAB
-			int sp = query_labels.at<int>(row, col);
-			HashKey &curr = query_superpixels[sp];
-
-			// add to total color values
-			curr.l_tot += lab_pixel[0];
-			curr.a_tot += lab_pixel[1];
-			curr.b_tot += lab_pixel[2];
-
-			// set initial params
-			if (curr.pixel_count == 0) {
-				curr.x_range.first = col;
-				curr.x_range.second = col;
-				curr.y_range.first = row;
-				curr.y_range.second = row;
-				curr.original_image = &query_image;
-			// update spatial extent
-			} else {
-				if (curr.x_range.first > col) curr.x_range.first = col;
-				if (curr.x_range.second < col) curr.x_range.second = col;
-				if (curr.y_range.first > row) curr.y_range.first = row;
-				if (curr.y_range.second < row) curr.y_range.second = row;
-			}
-			curr.pixel_count += 1;
-		}
-	}
-
-	// find matches by counting hash collisions
-	std::map<const cv::Mat*, int> match_counts;
-	for (int i = 0; i < query_superpixel_count; i++) {
-		int query_key = hash_table.calculate_hash_key(query_superpixels[i]);
-		if (query_key == -1) continue;
-
-		// check if this hash key exists in the table
-		if (hash_table.hashTable.count(query_key)) {
-			// if so, iterate all superpixels that share this key
-			std::vector<HashKey>& matches = hash_table.hashTable[query_key];
-			for (const HashKey& match : matches) {
-				// increment the count for the image this superpixel belongs to
-				match_counts[match.original_image]++;
+		// count pixels in each query superpixel
+		unsigned long* query_pixel_count = (unsigned long*) calloc(query_superpixel_count, sizeof(unsigned long));
+		for (int row = 0; row < query_labels.rows; row += 1) {
+			for (int col = 0; col < query_labels.cols; col += 1) {
+				query_pixel_count[query_labels.at<int>(row, col)] += 1;
 			}
 		}
-	}
 
-	// find the image with the highest match count
-	const cv::Mat* best_match_image_ptr = nullptr;
-	int max_matches = 0;
-	for (auto const& pair : match_counts) {
-		if (pair.second > max_matches) {
-			max_matches = pair.second;
-			best_match_image_ptr = pair.first;
+		// build HashKey structs for query superpixels
+		HashKey *query_superpixels = (HashKey*) calloc(query_superpixel_count, sizeof(HashKey));
+		for (int row = 0; row < query_labels.rows; row++) {
+			for (int col = 0; col < query_labels.cols; col++) {
+				cv::Vec3b lab_pixel = query_image.at<cv::Vec3b>(row, col); // using BGR as LAB
+				int sp = query_labels.at<int>(row, col);
+				HashKey &curr = query_superpixels[sp];
+
+				// add to total color values
+				curr.l_tot += lab_pixel[0];
+				curr.a_tot += lab_pixel[1];
+				curr.b_tot += lab_pixel[2];
+
+				// set initial params
+				if (curr.pixel_count == 0) {
+					curr.x_range.first = col;
+					curr.x_range.second = col;
+					curr.y_range.first = row;
+					curr.y_range.second = row;
+					curr.original_image = &query_image;
+				// update spatial extent
+				} else {
+					if (curr.x_range.first > col) curr.x_range.first = col;
+					if (curr.x_range.second < col) curr.x_range.second = col;
+					if (curr.y_range.first > row) curr.y_range.first = row;
+					if (curr.y_range.second < row) curr.y_range.second = row;
+				}
+				curr.pixel_count += 1;
+			}
 		}
-	}
 
-	// display the query image and the best match
-	namedWindow("Query Image");
-	imshow("Query Image", query_image);
+		// find matches by counting hash collisions
+		std::map<const cv::Mat*, int> match_counts;
+		for (int i = 0; i < query_superpixel_count; i++) {
+			int query_key = hash_table.calculate_hash_key(query_superpixels[i]);
+			if (query_key == -1) continue;
 
-	if (best_match_image_ptr != nullptr) {
-		namedWindow("Best Match");
-		imshow("Best Match", *best_match_image_ptr);
-	} else {
-		std::cout << "No matches found." << std::endl;
+			// check if this hash key exists in the table
+			if (hash_table.hashTable.count(query_key)) {
+				// if so, iterate all superpixels that share this key
+				std::vector<HashKey>& matches = hash_table.hashTable[query_key];
+				for (const HashKey& match : matches) {
+					// increment the count for the image this superpixel belongs to
+					match_counts[match.original_image]++;
+				}
+			}
+		}
+
+		// find the image with the highest match count
+		const cv::Mat* best_match_image_ptr = nullptr;
+		int max_matches = 0;
+		for (auto const& pair : match_counts) {
+			if (pair.second > max_matches) {
+				max_matches = pair.second;
+				best_match_image_ptr = pair.first;
+			}
+		}
+
+		// display the query image and the best match
+		namedWindow("Query Image");
+		imshow("Query Image", query_image);
+
+		if (best_match_image_ptr != nullptr) {
+			namedWindow("Best Match");
+			imshow("Best Match", *best_match_image_ptr);
+		} else {
+			std::cout << "No matches found." << std::endl;
+		}
+		
+		waitKey(0);
+
+		free(query_pixel_count);
+		free(query_superpixels);
 	}
 	
-	waitKey(0);
-
-	free(query_pixel_count);
-	free(query_superpixels);
 
 	
 
