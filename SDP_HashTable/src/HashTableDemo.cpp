@@ -1,6 +1,5 @@
-// Demo.cpp
-// Demonstrates SLIC
-// Author: Chandler Calkins
+// HashTableDemo.cpp
+// Author: Luke Erdy
 
 #include "SLICHashTable.hpp"
 #include "sdp_slic.hpp"
@@ -29,7 +28,7 @@ using namespace cv;
 // A file called output.jpg should be in the project folder.
 int main(int argc, char* argv[])
 {
-	int input_count = 4;
+	int input_count = 8;
 	// naming scheme: input0, input1,...inputN
 	// loop through and hash each one
 
@@ -116,7 +115,7 @@ int main(int argc, char* argv[])
 		// imwrite("output.png", output);
 	}
 	std::string qbase = "query";
-	int q_count = 4;
+	int q_count = 8;
 
 	for (int i = 0; i < q_count; i++) {
 		std::string num = std::to_string(i);
@@ -216,7 +215,7 @@ int main(int argc, char* argv[])
 		free(query_pixel_count);
 		free(query_superpixels);
 	}
-	
+	waitKey(0);
 
 	
 
