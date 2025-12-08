@@ -26,7 +26,6 @@ std::vector< std::vector<float> > SuperDuperPixel::get_histogram() { return this
 float SuperDuperPixel::distance_from(const std::vector<float>& average)
 {
     assert(this->average.size() == average.size());
-    //                                  ^^^^^^^^
     float dist = 0;
     for (int color_channel = 0; color_channel < this->average.size(); color_channel += 1)
     {
