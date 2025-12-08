@@ -103,7 +103,8 @@ int main(int argc, char* argv[])
 	
 	// Higher values means superpixels are more likely to be similar enough to be grouped
 	// Lower values means superpixels are less likely to be similar enough to be grouped
-	slic_1->duperizeWithAverage(20.0);
+	const float max_average_distance = 20.0;
+	slic_1->duperizeWithAverage(max_average_distance);
 	// Display superpixels
 	Mat average_output = show_superpixels(slic_1, input_image, window_name);
 	// Write output to an image file
@@ -114,7 +115,8 @@ int main(int argc, char* argv[])
 	// Distance of 2.0 is good for smoothness 100.0f
 	// Distance of 2.5 is good for smoothness of 0.0f
 	const int num_buckets[] = {8, 64, 64};
-	slic_2->duperizeWithHistogram(num_buckets, 2.5f);
+	const float max_histogram_distance = 2.5;
+	slic_2->duperizeWithHistogram(num_buckets, max_histogram_distance);
 	// Display superpixels
 	Mat histogram_output = show_superpixels(slic_2, input_image, window_name);
 	// Write output to an image file
