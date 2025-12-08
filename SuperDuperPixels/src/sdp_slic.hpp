@@ -143,21 +143,36 @@ public:
 
     @param distance The max distance the average colors of superpixels can be from each other to be
 	combined.
+
+	@param use_duper_distance If false, it only combines neighboring superpixels based on their individual stats.
+	If true, it combines superpixels based on the stats of the superduperpixels they're in (if they're already
+	in one).
      */
-	CV_WRAP virtual void duperizeWithAverage(const float distance) = 0;
+	CV_WRAP virtual void duperizeWithAverage(const float distance, const bool use_duper_distance = false) = 0;
 
 	/** @brief Combines adjacent superpixels into super-duper-pixels if they're similar enough in color.
 	
-	Uses distances between (normalized) color histograms of superpixels to determine if they're similar
-	enough in color.
+	Uses distances between color histograms of superpixels to determine if they're similar
+	enough in color. Histograms are normalized to be between 0 and 1 so they act as percentages rather
+	than raw pixel counts. This prevents large and small superpixels from having histograms that are too
+	different from each other.
 
     @param num_buckets The number of histogram buckets to use for each color channel
 	(RGB, HSV, LAB, etc.).
 
 	@param distance The max distance the (normalized) color histograms of superpixels can be from each
 	other to be combined.
+
+	@param use_duper_distance If false, it only combines neighboring superpixels based on their individual stats.
+	If true, it combines superpixels based on the stats of the superduperpixels they're in (if they're already
+	in one).
      */
-	CV_WRAP virtual void duperizeWithHistogram(const int num_buckets[], const float distance) = 0;
+	CV_WRAP virtual void duperizeWithHistogram
+	(
+		const int num_buckets[],
+		const float distance,
+		const bool use_duper_distance = false
+	) = 0;
 
 
 };

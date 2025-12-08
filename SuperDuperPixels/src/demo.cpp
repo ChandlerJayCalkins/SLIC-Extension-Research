@@ -1,5 +1,5 @@
 // Demo.cpp
-// Demonstrates SD-SLIC (Super Duper - Simple Linear Iterative Clustering)
+// Demonstrates SDP-SLIC (Super-Duper-Pixel - Simple Linear Iterative Clustering)
 // Author: Chandler Calkins
 
 #include <iostream>
@@ -13,7 +13,6 @@
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-// #include <opencv2/ximgproc/slic.hpp>
 #include "sdp_slic.hpp"
 using namespace cv;
 
@@ -24,6 +23,9 @@ using namespace cv;
 // window_name: the name of the window to display the superpixels to using cv::imshow()
 Mat show_superpixels(const Ptr<SuperpixelSLIC>& slic, const Mat& input_image, const String& window_name)
 {
+	// Create the window to display to
+	namedWindow(window_name);
+
 	// Gets overlay image of superpixels
 	Mat superpixels;
 	slic->getLabelContourMask(superpixels);
@@ -44,7 +46,13 @@ Mat show_superpixels(const Ptr<SuperpixelSLIC>& slic, const Mat& input_image, co
 
 	// Displays output to a window
 	imshow(window_name, output);
+	// Wait until the user presses a key or closes the window
 	waitKey(0);
+	// If the user closed the window (pressed the x button), exit the whole program
+	if (getWindowProperty(window_name, WND_PROP_VISIBLE) < 1)
+		exit(0);
+	// Close the window and return the image if the user pressed a button to continue
+	destroyWindow(window_name);
 	return output;
 }
 
@@ -56,7 +64,7 @@ Mat show_superpixels(const Ptr<SuperpixelSLIC>& slic, const Mat& input_image, co
 //
 // Postconditions:
 //
-// A file called output.png should be in the project folder.
+// 3 files called superpixels.png, superduperpixels_average.png, and superduperpixels_histogram.png should be in the project folder.
 int main(int argc, char* argv[])
 {
 	// Move out of build/Debug into root of project folder
@@ -75,32 +83,51 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	// Convert the image from RGB color space to CIELAB color space (strictly following SLIC algorithm)
 	Mat cielab_image;
 	cvtColor(input_image, cielab_image, COLOR_RGB2Lab);
 
 	// Creates window to display output to
-	const String window_name = "Superpixels";
-	namedWindow(window_name);
 
-	const int avg_superpixel_size = 100; // Default: 100
-	const float smoothness = 100.0f; // Default: 10.0
+	const int avg_superpixel_size = 25; // Default: 100
+	const float smoothness = 0.0f; // Default: 10.0
+	const int iterations = 1; // Default: 10
 	const int min_superpixel_size_percent = 4;
-	// Ptr<ximgproc::SuperpixelSLIC> slic = ximgproc::createSuperpixelSLIC(input_image, ximgproc::SLIC, avg_superpixel_size, smoothness);
-	Ptr<SuperpixelSLIC> slic = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
-	slic->iterate(1);
-	slic->enforceLabelConnectivity(min_superpixel_size_percent);
 
-	show_superpixels(slic, input_image, window_name);
-	
-	// 50.0 good for aguilles_rogues, 32.0 good for cosmo
-	slic->duperizeWithAverage(30.0);
-	// const int num_buckets[] = {16, 16, 16};
-	// slic->duperizeWithHistogram(num_buckets, 2.0f);
+	// Generate superpixels to show average-duperizing
+	Ptr<SuperpixelSLIC> slic_1 = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
+	slic_1->iterate(iterations);
+	slic_1->enforceLabelConnectivity(min_superpixel_size_percent);
+	// Generate superpixels to show histogram-duperizing
+	Ptr<SuperpixelSLIC> slic_2 = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
+	slic_2->iterate(iterations);
+	slic_2->enforceLabelConnectivity(min_superpixel_size_percent);
 
-	Mat output = show_superpixels(slic, input_image, window_name);
+	// Display superpixels
+	Mat output = show_superpixels(slic_1, input_image, "Superpixels");
+	// Write output to image file
+	imwrite("superpixels.png", output);
 	
+	// Higher values means superpixels are more likely to be similar enough to be grouped
+	// Lower values means superpixels are less likely to be similar enough to be grouped
+	const float max_average_distance = 20.0;
+	slic_1->duperizeWithAverage(max_average_distance);
+	// Display superpixels
+	Mat average_output = show_superpixels(slic_1, input_image, "Super-duper-pixels (grouped by average color)");
 	// Write output to an image file
-	imwrite("output.png", output);
+	imwrite("superpixels_average.png", average_output);
+	
+	// More buckets means superpixels are less likely to be similar enough to be grouped
+	// Less buckets means superpixels are more likely to be similar enough to be grouped
+	// Distance of 2.0 is good for smoothness 100.0f
+	// Distance of 2.5 is good for smoothness of 0.0f
+	const int num_buckets[] = {8, 64, 64};
+	const float max_histogram_distance = 2.5;
+	slic_2->duperizeWithHistogram(num_buckets, max_histogram_distance);
+	// Display superpixels
+	Mat histogram_output = show_superpixels(slic_2, input_image, "Super-duper-pixels (grouped by color histograms)");
+	// Write output to an image file
+	imwrite("superpixels_histogram.png", histogram_output);
 
 	return 0;
 }

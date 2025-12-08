@@ -523,7 +523,7 @@ void SDPLTriDPSLIC::enforceLabelConnectivity(int min_element_size)
  * Combine adjacent superpixels into super-duper-pixels if they're similar enough in color.
  * Uses average colors of superpixels to determine if they're similar enough in color.
  */
-void SDPLTriDPSLIC::duperizeWithAverage(const float max_distance)
+void SDPLTriDPSLIC::duperizeWithAverage(const float max_distance, const bool use_duper_distance = false)
 {
 	// Graph of which superpixels are adjecent to each other
 	// First dimension is each superpixel
@@ -547,6 +547,7 @@ void SDPLTriDPSLIC::duperizeWithAverage(const float max_distance)
 	this->groupSuperpixels
 	(
 		max_distance,
+		use_duper_distance,
 		superpixel_neighbors,
 		superpixel_average_colors,
 		superpixel_population,
@@ -569,7 +570,7 @@ void SDPLTriDPSLIC::duperizeWithAverage(const float max_distance)
  * Combine adjacent superpixels into super-duper-pixels if they're similar enough in color.
  * Uses (normalized) color histograms of superpixels to determine if they're similar enough in color.
  */
-void SDPLTriDPSLIC::duperizeWithHistogram(const int num_buckets[], const float distance)
+void SDPLTriDPSLIC::duperizeWithHistogram(const int num_buckets[], const float distance, const bool use_duper_distance = false)
 {
 	// Graph of which superpixels are adjecent to each other
 	// First dimension is each superpixel
@@ -601,6 +602,7 @@ void SDPLTriDPSLIC::duperizeWithHistogram(const int num_buckets[], const float d
 	(
 		num_buckets,
 		distance,
+		use_duper_distance,
 		superpixel_neighbors,
 		superpixel_color_histograms,
 		superpixel_population,
@@ -853,9 +855,11 @@ void SDPLTriDPSLIC::addColorsToHistograms
 	}
 }
 
+// Groups superpixels into super-duper-pixels based on their average colors
 void SDPLTriDPSLIC::groupSuperpixels
 (
 	const float max_distance,
+	const bool use_duper_distance,
 	const std::vector< std::set<int> >& superpixel_neighbors,
 	const std::vector< std::vector<float> >& superpixel_average_colors,
 	const std::vector<int>& superpixel_population,
@@ -872,14 +876,17 @@ void SDPLTriDPSLIC::groupSuperpixels
 	{
 		std::vector<float> average_colors(m_nr_channels);
 		this->extractAverageColors(superpixel_average_colors, average_colors, superpixel);
+		// Loop through each neighbor of this superpixel
 		for (int neighbor: superpixel_neighbors[superpixel])
 		{
 			// Don't try to group together superpixels that are already grouped together
 			if (superduperpixel_pointers[neighbor] == superduperpixel_pointers[superpixel] && superduperpixel_pointers[neighbor] != NULL)
 			continue;
 
+			// Get color distance to neighbor
 			float neighbor_distance = this->getColorDistance
 			(
+				use_duper_distance,
 				superduperpixels,
 				superduperpixel_pointers,
 				superpixel_average_colors,
@@ -888,6 +895,7 @@ void SDPLTriDPSLIC::groupSuperpixels
 				neighbor
 			);
 
+			// If the distance is close enough, group them into a super-duper-pixel
 			if (neighbor_distance < max_distance)
 			{
 				this->combineIntoSuperDuperPixel
@@ -908,14 +916,17 @@ void SDPLTriDPSLIC::groupSuperpixels
 		{
 			superduperpixels.push_back(SuperDuperPixel(superpixel, average_colors, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
+			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
 	}
 }
 
+// Groups superpixels into super-duper-pixels based on their color histograms
 void SDPLTriDPSLIC::groupSuperpixels
 (
 	const int num_buckets[],
 	const float max_distance,
+	const bool use_duper_distance,
 	const std::vector< std::set<int> >& superpixel_neighbors,
 	const std::vector< std::vector< std::vector<float> >>& superpixel_color_histograms,
 	const std::vector<int>& superpixel_population,
@@ -939,9 +950,11 @@ void SDPLTriDPSLIC::groupSuperpixels
 			if (superduperpixel_pointers[neighbor] == superduperpixel_pointers[superpixel] && superduperpixel_pointers[neighbor] != NULL)
 			continue;
 
+			// Get color distance to neighbor
 			float neighbor_distance = this->getColorDistance
 			(
 				num_buckets,
+				use_duper_distance,
 				superduperpixels,
 				superduperpixel_pointers,
 				superpixel_color_histograms,
@@ -950,6 +963,7 @@ void SDPLTriDPSLIC::groupSuperpixels
 				neighbor
 			);
 
+			// If the distance is close enough, group them into a super-duper-pixel
 			if (neighbor_distance < max_distance)
 			{
 				this->combineIntoSuperDuperPixel
@@ -971,28 +985,38 @@ void SDPLTriDPSLIC::groupSuperpixels
 		{
 			superduperpixels.push_back(SuperDuperPixel(superpixel, color_histogram, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
+			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
 	}
 }
 
+// Gets the color distance between 2 superpixels' average colors
 float SDPLTriDPSLIC::getColorDistance
 (
+	const bool use_duper_distance,
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const std::vector< std::vector<float> >& superpixel_average_colors,
-	std::vector<float>& average_colors,
+	const std::vector<float>& average_colors,
 	const int superpixel,
 	const int neighbor
 )
 {
-	// TODO: Fix this
-	// if (superduperpixel_pointers[neighbor] != NULL)
-	// 	return (*superduperpixel_pointers[neighbor]).distance_from(average_colors);
+	// If this superpixel is already in a superduperpixel, use the distance from that instead of the individual superpixel
+	// Don't do this if use_duper_distance is false though
+	std::vector<float> avg_colors = use_duper_distance && superduperpixel_pointers[superpixel] != NULL ?
+	(*superduperpixel_pointers[superpixel]).get_average() :
+	average_colors;
+
+	// If the neighbor is already in a super-duper-pixel, use the distance to the whole super-duper-pixel it's in instead of just the neighbor
+	// Don't do this if use_duper_distance is false though
+	if (use_duper_distance && superduperpixel_pointers[neighbor] != NULL)
+		return (*superduperpixel_pointers[neighbor]).distance_from(avg_colors);
 
 	float neighbor_distance = 0;
 	for (int color_channel = 0; color_channel < m_nr_channels; color_channel += 1)
 	{
-		float difference = superpixel_average_colors[color_channel][superpixel] - superpixel_average_colors[color_channel][neighbor];
+		float difference = avg_colors[color_channel] - superpixel_average_colors[color_channel][neighbor];
 		// opencv slic algorithm square diff before adding it to dist.
 		// neighbor_distance += difference * difference;
 		// Just take absolute value to do mahnattan distance instead.
@@ -1005,26 +1029,35 @@ float SDPLTriDPSLIC::getColorDistance
 	return neighbor_distance;
 }
 
+// Gets the color distance between 2 superpixels' color histograms
 float SDPLTriDPSLIC::getColorDistance
 (
 	const int num_buckets[],
+	const bool use_duper_distance,
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const std::vector< std::vector< std::vector<float> >>& superpixel_color_histograms, 
-	std::vector< std::vector<float> >& color_histogram,
+	const std::vector< std::vector<float> >& color_histogram,
 	const int superpixel,
 	const int neighbor
 )
 {
-	// TODO: Fix this
-	// if (superduperpixel_pointers[neighbor] != NULL)
-	// 	return (*superduperpixel_pointers[neighbor]).distance_from(color_histogram);
+	// If this superpixel is already in a superduperpixel, use the distance from that instead of the individual superpixel
+	// Don't do this if use_duper_distance is false though
+	std::vector< std::vector<float> > histogram = use_duper_distance && superduperpixel_pointers[superpixel] != NULL ?
+	(*superduperpixel_pointers[superpixel]).get_histogram() :
+	color_histogram;
+
+	// If the neighbor is already in a super-duper-pixel, use the distance to the whole super-duper-pixel it's in instead of just the neighbor
+	// Don't do this if use_duper_distance is false though
+	if (use_duper_distance && superduperpixel_pointers[neighbor] != NULL)
+		return (*superduperpixel_pointers[neighbor]).distance_from(color_histogram);
 
 	float neighbor_distance = 0;
 	for (int color_channel = 0; color_channel < m_nr_channels; color_channel += 1)
 	for (int bucket = 0; bucket < num_buckets[color_channel]; bucket += 1)
 	{
-		float difference = superpixel_color_histograms[color_channel][bucket][superpixel] - superpixel_color_histograms[color_channel][bucket][neighbor];
+		float difference = histogram[color_channel][bucket] - superpixel_color_histograms[color_channel][bucket][neighbor];
 		// opencv slic algorithm square diff before adding it to dist.
 		// neighbor_distance += difference * difference;
 		// Just take absolute value to do mahnattan distance instead.
@@ -1037,6 +1070,7 @@ float SDPLTriDPSLIC::getColorDistance
 	return neighbor_distance;
 }
 
+// Gets a vector of the average colors for a superpixel
 void SDPLTriDPSLIC::extractAverageColors
 (
 	const std::vector< std::vector<float> >& superpixel_average_colors,
@@ -1050,6 +1084,7 @@ void SDPLTriDPSLIC::extractAverageColors
 	}
 }
 
+// Gets a vector of the color histogram for a superpixel
 void SDPLTriDPSLIC::extractColorHistogram
 (
 	const int num_buckets[],
@@ -1068,6 +1103,7 @@ void SDPLTriDPSLIC::extractColorHistogram
 	}
 }
 
+// Combines 2 superpixels into a super-duper-pixel using their average colors
 void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 (
 	std::list<SuperDuperPixel>& superduperpixels,
@@ -1080,30 +1116,40 @@ void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 	const int neighbor
 )
 {
+	// If the neighbor is not already in a super-duper-pixel
 	if (superduperpixel_pointers[neighbor] == NULL)
 	{
+		// If neither superpixels are in a super-duper-pixel
 		if (superduperpixel_pointers[superpixel] == NULL)
 		{
+			// Create a new super-duper-pixel with the current superpixel
 			superduperpixels.push_back(SuperDuperPixel(superpixel, average_colors, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
 			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
+		// Add the neighbor to the super-duper-pixel
 		std::vector<float> neighbor_average_colors(m_nr_channels);
 		this->extractAverageColors(superpixel_average_colors, neighbor_average_colors, neighbor);
 		superduperpixel_pointers[superpixel]->add_superpixel(neighbor, neighbor_average_colors, superpixel_population[neighbor]);
 		superduperpixel_pointers[neighbor] = superduperpixel_pointers[superpixel];
 		superduperpixel_iterators[neighbor] = superduperpixel_iterators[superpixel];
 	}
+	// If the neighbor is already in a superpixel
 	else
 	{
+		// If this superpixel is not in a super-duper-pixel yet
 		if (superduperpixel_pointers[superpixel] == NULL)
 		{
+			// Add it to the neighbor's super-duper-pixel
 			superduperpixel_pointers[neighbor]->add_superpixel(superpixel, average_colors, superpixel_population[superpixel]);
 			superduperpixel_pointers[superpixel] = superduperpixel_pointers[neighbor];
 			superduperpixel_iterators[superpixel] = superduperpixel_iterators[neighbor];
 		}
-		else
+		// If this superpixel is also already in a super-duper-pixel
+		// And they're not in the same one
+		else if (superduperpixel_pointers[superpixel] != superduperpixel_pointers[neighbor])
 		{
+			// Merge the superpixels (move all the superpixels from A to B and delete A)
 			std::list<SuperDuperPixel>::iterator merging_superduperpixel = superduperpixel_iterators[neighbor];
 			(*superduperpixel_pointers[superpixel]) += superduperpixel_pointers[neighbor];
 			for (int connected_neighbor : superduperpixel_pointers[neighbor]->get_superpixels())
@@ -1116,6 +1162,7 @@ void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 	}
 }
 
+// Combines 2 superpixels into a super-duper-pixel using their color histograms
 void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 (
 	const int num_buckets[],
@@ -1129,30 +1176,39 @@ void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 	const int neighbor
 )
 {
+	// If the neighbor is not already in a super-duper-pixel
 	if (superduperpixel_pointers[neighbor] == NULL)
 	{
+		// If neither superpixels are in a super-duper-pixel
 		if (superduperpixel_pointers[superpixel] == NULL)
 		{
+			// Create a new super-duper-pixel with the current superpixel
 			superduperpixels.push_back(SuperDuperPixel(superpixel, color_histogram, superpixel_population[superpixel]));
 			superduperpixel_pointers[superpixel] = &superduperpixels.back();
 			superduperpixel_iterators[superpixel] = --superduperpixels.end();
 		}
+		// Add the neighbor to the super-duper-pixel
 		std::vector< std::vector<float>> neighbor_color_histogram(m_nr_channels);
 		this->extractColorHistogram(num_buckets, superpixel_color_histograms, neighbor_color_histogram, neighbor);
 		superduperpixel_pointers[superpixel]->add_superpixel(neighbor, neighbor_color_histogram, superpixel_population[neighbor]);
 		superduperpixel_pointers[neighbor] = superduperpixel_pointers[superpixel];
 		superduperpixel_iterators[neighbor] = superduperpixel_iterators[superpixel];
 	}
+	// If the neighbor is already in a superpixel
 	else
 	{
+		// If this superpixel is not in a super-duper-pixel yet
 		if (superduperpixel_pointers[superpixel] == NULL)
 		{
 			superduperpixel_pointers[neighbor]->add_superpixel(superpixel, color_histogram, superpixel_population[superpixel]);
 			superduperpixel_pointers[superpixel] = superduperpixel_pointers[neighbor];
 			superduperpixel_iterators[superpixel] = superduperpixel_iterators[neighbor];
 		}
-		else
+		// If this superpixel is also already in a super-duper-pixel
+		// And they're not in the same one
+		else if (superduperpixel_pointers[superpixel] != superduperpixel_pointers[neighbor])
 		{
+			// Merge the superpixels (move all the superpixels from A to B and delete A)
 			std::list<SuperDuperPixel>::iterator merging_superduperpixel = superduperpixel_iterators[neighbor];
 			(*superduperpixel_pointers[superpixel]) += superduperpixel_pointers[neighbor];
 			for (int connected_neighbor : superduperpixel_pointers[neighbor]->get_superpixels())
@@ -1165,12 +1221,14 @@ void SDPLTriDPSLIC::combineIntoSuperDuperPixel
 	}
 }
 
+// Gives super-duper-pixels indexes to assign to pixels as labels for what superpixel they're in
 int SDPLTriDPSLIC::indexSuperduperpixels
 (
 	const std::list<SuperDuperPixel>& superduperpixels,
 	std::vector<int>& superduperpixel_indexes
 )
 {
+	// Iterate through every super-duper-pixel and give them indexes starting at 0
 	superduperpixel_indexes = std::vector<int>(m_numlabels, -1);
 	int superduperpixel_count = 0;
 	for (SuperDuperPixel sdp : superduperpixels)
@@ -1184,9 +1242,10 @@ int SDPLTriDPSLIC::indexSuperduperpixels
 	return superduperpixel_count;
 }
 
+// Assigns new super-duper-pixel indexes to pixels in the image as labels for what superpixel they're in
 void SDPLTriDPSLIC::assignSuperduperpixels(const std::vector<int>& superduperpixel_indexes)
 {
-	// Change m_klabels so pixels use superduperpixels instead of their old superpixels
+	// Change m_klabels so pixels use superduperpixel indexes instead of their old superpixel labels
 	for (int y = 0; y < m_height; y += 1)
 	for (int x = 0; x < m_width; x += 1)
 	{

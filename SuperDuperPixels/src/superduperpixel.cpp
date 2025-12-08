@@ -1,5 +1,6 @@
 #include "SuperDuperPixel.hpp"
 #include <assert.h>
+#include <iostream>
 
 SuperDuperPixel::SuperDuperPixel(int superpixel, std::vector<float> average, int pixel_count)
 {
@@ -19,34 +20,33 @@ SuperDuperPixel::SuperDuperPixel(int superpixel, std::vector< std::vector<float>
 
 SuperDuperPixelMode SuperDuperPixel::get_mode() { return this->mode; }
 std::vector<int> SuperDuperPixel::get_superpixels() { return this->superpixels; }
+std::vector<float> SuperDuperPixel::get_average() { return this->average; }
+std::vector< std::vector<float> > SuperDuperPixel::get_histogram() { return this->histogram; }
 
 float SuperDuperPixel::distance_from(const std::vector<float>& average)
 {
-	assert(this->average.size() == average->size());
-	float dist = 0;
-	for (int color_channel = 0; color_channel < this->average.size(); color_channel += 1)
-	{
-		float diff = this->average[color_channel] - average[color_channel];
-		// OpenCV SLIC algorithm square diff before adding it to dist.
-		// dist += diff * diff;
-		// Just take absolute value to do mahnattan distance instead.
-		dist += abs(diff);
-	}
-	// Just use manhattan distance here.
-	// Could do this to be more precise (euclidian distance, would also need to square the diff above), but OpenCV
-	// SLIC algorithm doesn't use it either.
-	// dist = sqrt(dist);
-	return dist;
+    assert(this->average.size() == average.size());
+    float dist = 0;
+    for (int color_channel = 0; color_channel < this->average.size(); color_channel += 1)
+    {
+        float diff = this->average[color_channel] - average[color_channel];
+        // OpenCV SLIC algorithm square diff before adding it to dist.
+        // dist += diff * diff;
+        // Just take absolute value to do manhattan distance instead.
+        dist += abs(diff);
+    }
+    // Just use manhattan distance here.
+    return dist;
 }
 
 float SuperDuperPixel::distance_from(const std::vector< std::vector<float> >& histogram)
 {
-	assert(this->histogram.size() == histogram->size());
+	assert(this->histogram.size() == histogram.size());
 	float dist = 0;
 	for (int color_channel = 0; color_channel < this->histogram.size(); color_channel += 1)
 	{
 		assert(this->histogram[color_channel].size() == histogram[color_channel].size());
-		for (int bucket = 0; bucket < this->histogram[color_channel].size(); color_channel += 1)
+		for (int bucket = 0; bucket < this->histogram[color_channel].size(); bucket += 1)
 		{
 			float diff = this->histogram[color_channel][bucket] - histogram[color_channel][bucket];
 			// OpenCV SLIC algorithm square diff before adding it to dist.

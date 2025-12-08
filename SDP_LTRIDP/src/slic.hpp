@@ -215,21 +215,36 @@ public:
 
     @param distance The max distance the average colors of superpixels can be from each other to be
 	combined.
+
+	@param use_duper_distance If false, it only combines neighboring superpixels based on their individual stats.
+	If true, it combines superpixels based on the stats of the superduperpixels they're in (if they're already
+	in one).
      */
-	void duperizeWithAverage(const float distance);
+	void duperizeWithAverage(const float distance, const bool use_duper_distance = false);
 
 	/** @brief Combines adjacent superpixels into super-duper-pixels if they're similar enough in color.
 	
-	Uses distances between (normalized) color histograms of superpixels to determine if they're similar
-	enough in color.
+	Uses distances between color histograms of superpixels to determine if they're similar
+	enough in color. Histograms are normalized to be between 0 and 1 so they act as percentages rather
+	than raw pixel counts. This prevents large and small superpixels from having histograms that are too
+	different from each other.
 
     @param num_buckets The number of histogram buckets to use for each color channel
 	(RGB, HSV, LAB, etc.).
 
 	@param distance The max distance the (normalized) color histograms of superpixels can be from each
 	other to be combined.
+
+	@param use_duper_distance If false, it only combines neighboring superpixels based on their individual stats.
+	If true, it combines superpixels based on the stats of the superduperpixels they're in (if they're already
+	in one).
      */
-	void duperizeWithHistogram(const int num_buckets[], const float distance);
+	void duperizeWithHistogram
+	(
+		const int num_buckets[],
+		const float distance,
+		const bool use_duper_distance = false
+	);
 
 protected:
     // Image dimensions
@@ -347,6 +362,7 @@ private:
 
 	//////////////////// Custom Methods ////////////////////
 
+	// Finds each superpixel's neighboring superpixels and the average color of each superpixel
 	inline void findSuperpixelNeighborsAndAverages
 	(
 		std::vector< std::set<int> >& superpixel_neighbors,
@@ -354,6 +370,7 @@ private:
 		std::vector<int>& superpixel_population
 	);
 
+	// Finds each superpixel's neighboring superpixels and the normalized (between 0 and 1) color histogram of each superpixel
 	inline void findSuperpixelNeighborsAndHistograms
 	(
 		const int num_buckets[],
@@ -362,6 +379,7 @@ private:
 		std::vector<int>& superpixel_population
 	);
 
+	// Adds a specific pixel's color to its superpixel's average color
 	inline void addColorsToAverages
 	(
 		std::vector< std::vector<float> >& superpixel_average_colors,
@@ -370,6 +388,7 @@ private:
 		const int y
 	);
 
+	// Adds a specific pixel's color to its superpixel's color histogram
 	inline void addColorsToHistograms
 	(
 		const int num_buckets[],
@@ -379,6 +398,7 @@ private:
 		const int y
 	);
 
+	// Links superpixels to each neighboring superpixel above and to the left of it
 	inline void linkNeighborSuperpixels
 	(
 		std::vector< std::set<int> >& superpixel_neighbors,
@@ -387,9 +407,11 @@ private:
 		const int y
 	);
 
+	// Groups superpixels into super-duper-pixels based on their average colors
 	inline void groupSuperpixels
 	(
 		const float max_distance,
+		const bool use_duper_distance,
 		const std::vector< std::set<int> >& superpixel_neighbors,
 		const std::vector< std::vector<float> >& superpixel_average_colors,
 		const std::vector<int>& superpixel_population,
@@ -398,10 +420,12 @@ private:
 		std::vector<std::list<SuperDuperPixel>::iterator>& superduperpixel_iterators
 	);
 
+	// Groups superpixels into super-duper-pixels based on their color histograms
 	inline void groupSuperpixels
 	(
 		const int num_buckets[],
 		const float max_distance,
+		const bool use_duper_distance,
 		const std::vector< std::set<int> >& superpixel_neighbors,
 		const std::vector< std::vector< std::vector<float> >>& superpixel_color_histograms,
 		const std::vector<int>& superpixel_population,
@@ -410,27 +434,32 @@ private:
 		std::vector<std::list<SuperDuperPixel>::iterator>& superduperpixel_iterators
 	);
 
+	// Gets the color distance between 2 superpixels' average colors
 	inline float getColorDistance
 	(
+		const bool use_duper_distance,
 		const std::list<SuperDuperPixel>& superduperpixels,
 		const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 		const std::vector< std::vector<float> >& superpixel_average_colors, 
-		std::vector<float>& average_colors,
+		const std::vector<float>& average_colors,
 		const int superpixel,
 		const int neighbor
 	);
 
+	// Gets the color distance between 2 superpixels' color histograms
 	inline float getColorDistance
 	(
 		const int num_buckets[],
+		const bool use_duper_distance,
 		const std::list<SuperDuperPixel>& superduperpixels,
 		const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 		const std::vector< std::vector< std::vector<float> >>& superpixel_color_histograms, 
-		std::vector< std::vector<float> >& color_histogram,
+		const std::vector< std::vector<float> >& color_histogram,
 		const int superpixel,
 		const int neighbor
 	);
 
+	// Gets a std::vector of the average colors for a superpixel
 	inline void extractAverageColors
 	(
 		const std::vector< std::vector<float> >& superpixel_average_colors,
@@ -438,6 +467,7 @@ private:
 		const int superpixel
 	);
 
+	// Gets a std::vector of the color histogram for a superpixel
 	inline void extractColorHistogram
 	(
 		const int num_buckets[],
@@ -446,6 +476,7 @@ private:
 		const int superpixel
 	);
 
+	// Combines 2 superpixels into a super-duper-pixel using their average colors
 	inline void combineIntoSuperDuperPixel
 	(
 		std::list<SuperDuperPixel>& superduperpixels,
@@ -458,6 +489,7 @@ private:
 		const int neighbor
 	);
 
+	// Combines 2 superpixels into a super-duper-pixel using their color histograms
 	inline void combineIntoSuperDuperPixel
 	(
 		const int num_buckets[],
@@ -471,12 +503,14 @@ private:
 		const int neighbor
 	);
 
+	// Gives super-duper-pixels indexes to assign to pixels as labels for what superpixel they're in
 	inline int indexSuperduperpixels
 	(
 		const std::list<SuperDuperPixel>& superduperpixels,
 		std::vector<int>& superduperpixel_indexes
 	);
 
+	// Assigns new super-duper-pixel indexes to pixels in the image as labels for what superpixel they're in
 	inline void assignSuperduperpixels(const std::vector<int>& superduperpixel_indexes);
 
 	static const int m_nr_channels = 1;
