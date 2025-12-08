@@ -17,6 +17,13 @@ add_executable(superpixel_ris
     ../SuperDuperPixels/src/sdp_slic.cpp
     ../SuperDuperPixels/src/superduperpixel.cpp
 )
+add_executable(distance_calculation
+    src/distance_calculation.cpp
+)
+
+target_link_libraries(distance_calculation
+    ${OpenCV_LIBS}
+)
 
 target_include_directories(superpixel_ris PRIVATE
     ${OpenCV_INCLUDE_DIRS}
