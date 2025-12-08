@@ -335,7 +335,7 @@ private:
 		const std::list<SuperDuperPixel>& superduperpixels,
 		const vector<SuperDuperPixel*>& superduperpixel_pointers,
 		const vector< vector<float> >& superpixel_average_colors, 
-		vector<float>& average_colors,
+		const vector<float>& average_colors,
 		const int superpixel,
 		const int neighbor
 	);
@@ -347,7 +347,7 @@ private:
 		const std::list<SuperDuperPixel>& superduperpixels,
 		const vector<SuperDuperPixel*>& superduperpixel_pointers,
 		const vector< vector< vector<float> >>& superpixel_color_histograms, 
-		vector< vector<float> >& color_histogram,
+		const vector< vector<float> >& color_histogram,
 		const int superpixel,
 		const int neighbor
 	);
@@ -1277,7 +1277,7 @@ float SuperpixelSLICImpl::getColorDistance
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const vector< vector<float> >& superpixel_average_colors,
-	vector<float>& average_colors,
+	const vector<float>& average_colors,
 	const int superpixel,
 	const int neighbor
 )
@@ -1309,7 +1309,7 @@ float SuperpixelSLICImpl::getColorDistance
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const vector< vector< vector<float> >>& superpixel_color_histograms, 
-	vector< vector<float> >& color_histogram,
+	const vector< vector<float> >& color_histogram,
 	const int superpixel,
 	const int neighbor
 )

@@ -982,7 +982,7 @@ float LTriDPSuperpixelSLIC::getColorDistance
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const std::vector< std::vector<float> >& superpixel_average_colors,
-	std::vector<float>& average_colors,
+	const std::vector<float>& average_colors,
 	const int superpixel,
 	const int neighbor
 )
@@ -1014,7 +1014,7 @@ float LTriDPSuperpixelSLIC::getColorDistance
 	const std::list<SuperDuperPixel>& superduperpixels,
 	const std::vector<SuperDuperPixel*>& superduperpixel_pointers,
 	const std::vector< std::vector< std::vector<float> >>& superpixel_color_histograms, 
-	std::vector< std::vector<float> >& color_histogram,
+	const std::vector< std::vector<float> >& color_histogram,
 	const int superpixel,
 	const int neighbor
 )
