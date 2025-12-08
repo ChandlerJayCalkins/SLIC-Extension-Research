@@ -1,3 +1,5 @@
+// Author: Luke Erdy
+
 #ifndef SLICHASHTABLE_HPP
 #define SLICHASHTABLE_HPP
 

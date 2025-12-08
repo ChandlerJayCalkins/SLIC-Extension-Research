@@ -1,8 +1,8 @@
-// Demo.cpp
-// Demonstrates SLIC
-// Author: Chandler Calkins
+// HashTableDemo.cpp
+// Author: Luke Erdy
 
 #include "SLICHashTable.hpp"
+#include "sdp_slic.hpp"
 #include <iostream>
 #include <string>
 #ifdef _WIN32
@@ -13,7 +13,7 @@
 #endif
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-#include <opencv2/ximgproc/slic.hpp>
+//#include <opencv2/ximgproc/slic.hpp>
 #include <map>
 using namespace cv;
 
@@ -28,7 +28,7 @@ using namespace cv;
 // A file called output.jpg should be in the project folder.
 int main(int argc, char* argv[])
 {
-	int input_count = 4;
+	int input_count = 8;
 	// naming scheme: input0, input1,...inputN
 	// loop through and hash each one
 
@@ -40,8 +40,8 @@ int main(int argc, char* argv[])
 	std::string ext = ".jpg";
 	std::string base = "input";
 	const int min_superpixel_size_percent = 4;
-	const int avg_superpixel_size = 100; // Default: 100
-	const float smoothness = 100.0f; // Default: 10.0
+	const int avg_superpixel_size = 25; // Default: 100
+	const float smoothness = 0.0f; // Default: 10.0
 
 	// initialize hash table
 	SLICHashTable hash_table;
@@ -57,9 +57,13 @@ int main(int argc, char* argv[])
 
 		
 		
-		Ptr<ximgproc::SuperpixelSLIC> slic = ximgproc::createSuperpixelSLIC(database_images[i], ximgproc::SLIC, avg_superpixel_size, smoothness);
+		//Ptr<ximgproc::SuperpixelSLIC> slic = ximgproc::createSuperpixelSLIC(database_images[i], ximgproc::SLIC, avg_superpixel_size, smoothness);
+		
+		// Duperize
+		Ptr<SuperpixelSLIC> slic = createSuperpixelSLIC(database_images[i], SLIC, avg_superpixel_size, smoothness);
 		slic->iterate();
 		slic->enforceLabelConnectivity(min_superpixel_size_percent);
+		slic->duperizeWithAverage(25.0f);
 
 		// Gets 2D array of the superpixel each pixel is a part of
 		Mat labels;
@@ -111,7 +115,7 @@ int main(int argc, char* argv[])
 		// imwrite("output.png", output);
 	}
 	std::string qbase = "query";
-	int q_count = 4;
+	int q_count = 8;
 
 	for (int i = 0; i < q_count; i++) {
 		std::string num = std::to_string(i);
@@ -120,9 +124,10 @@ int main(int argc, char* argv[])
 		Mat query_image = imread(q_file_name);
 
 		// generate superpixels for query image
-		Ptr<ximgproc::SuperpixelSLIC> query_slic = ximgproc::createSuperpixelSLIC(query_image, ximgproc::SLIC, avg_superpixel_size, smoothness);
+		Ptr<SuperpixelSLIC> query_slic = createSuperpixelSLIC(database_images[i], SLIC, avg_superpixel_size, smoothness);
 		query_slic->iterate();
 		query_slic->enforceLabelConnectivity(min_superpixel_size_percent);
+		query_slic->duperizeWithAverage(25.0f);
 
 		Mat query_labels;
 		query_slic->getLabels(query_labels);
@@ -210,7 +215,7 @@ int main(int argc, char* argv[])
 		free(query_pixel_count);
 		free(query_superpixels);
 	}
-	
+	waitKey(0);
 
 	
 
