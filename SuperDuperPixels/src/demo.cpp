@@ -1,5 +1,5 @@
 // Demo.cpp
-// Demonstrates SD-SLIC (Super Duper - Simple Linear Iterative Clustering)
+// Demonstrates SDP-SLIC (Super-Duper-Pixel - Simple Linear Iterative Clustering)
 // Author: Chandler Calkins
 
 #include <iostream>
@@ -13,7 +13,6 @@
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-// #include <opencv2/ximgproc/slic.hpp>
 #include "sdp_slic.hpp"
 using namespace cv;
 
@@ -120,7 +119,6 @@ int main(int argc, char* argv[])
 	Mat histogram_output = show_superpixels(slic_2, input_image, window_name);
 	// Write output to an image file
 	imwrite("superpixels_histogram.png", histogram_output);
-	
 
 	return 0;
 }
