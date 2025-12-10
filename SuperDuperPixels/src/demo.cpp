@@ -90,9 +90,9 @@ int main(int argc, char* argv[])
 	// Creates window to display output to
 
 	const int avg_superpixel_size = 25; // Default: 100
-	const float smoothness = 0.0f; // Default: 10.0
+	const float smoothness = 0.0; // Default: 10.0
 	const int iterations = 1; // Default: 10
-	const int min_superpixel_size_percent = 4;
+	const int min_superpixel_size_percent = 5;
 
 	// Generate superpixels to show average-duperizing
 	Ptr<SuperpixelSLIC> slic_1 = createSuperpixelSLIC(cielab_image, SLIC, avg_superpixel_size, smoothness);
@@ -110,8 +110,10 @@ int main(int argc, char* argv[])
 	
 	// Higher values means superpixels are more likely to be similar enough to be grouped
 	// Lower values means superpixels are less likely to be similar enough to be grouped
-	const float max_average_distance = 20.0;
-	slic_1->duperizeWithAverage(max_average_distance);
+	// distance = 20.0, use_duper_distance = false
+	// distance = 40.0, use_duper_distance = true
+	const float max_average_distance = 40.0;
+	slic_1->duperizeWithAverage(max_average_distance, true);
 	// Display superpixels
 	Mat average_output = show_superpixels(slic_1, input_image, "Super-duper-pixels (grouped by average color)");
 	// Write output to an image file
@@ -119,11 +121,11 @@ int main(int argc, char* argv[])
 	
 	// More buckets means superpixels are less likely to be similar enough to be grouped
 	// Less buckets means superpixels are more likely to be similar enough to be grouped
-	// Distance of 2.0 is good for smoothness 100.0f
-	// Distance of 2.5 is good for smoothness of 0.0f
-	const int num_buckets[] = {8, 64, 64};
-	const float max_histogram_distance = 2.5;
-	slic_2->duperizeWithHistogram(num_buckets, max_histogram_distance);
+	// smoothness = 100.0, distance = 2.0
+	// smoothness = 0.0, distance = 2.15
+	const int num_buckets[] = {8, 32, 32};
+	const float max_histogram_distance = 2.15f;
+	slic_2->duperizeWithHistogram(num_buckets, max_histogram_distance, false);
 	// Display superpixels
 	Mat histogram_output = show_superpixels(slic_2, input_image, "Super-duper-pixels (grouped by color histograms)");
 	// Write output to an image file
