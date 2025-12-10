@@ -38,7 +38,9 @@
 ##############################
 
 # CMakeTools VSCode extension build files
-*/build
+# Ignore subdirectory build folders but not root build/
+*/build/
+!build/
 
 # VSCode settings
 */.vscode
