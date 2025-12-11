@@ -15,11 +15,6 @@ By: Everett-Alan Hood
 
 TODO: Everett needs to write about his demo here
 
-## HashTable
-By: Luke Erdy
-
-TODO: Luke needs to write about his demo here
-
 ## ltridp
 By: Ketsia Mbaku
 
@@ -28,7 +23,13 @@ TODO: Ketsia needs to write about her demo here
 ## SDP_HashTable
 By: Luke Erdy
 
-TODO: Luke needs to write about this demo here
+``SDP_HashTable/src/HashTableDemo.cpp`` uses the class defined in ``SLICHashTable.hpp``  to segment images according to the modified SLIC algorithm (SDP), generate key-value pairs storing their superpixels in a hash map, and perform a sequence of queries which will return similar images from the present database based on similarity.
+Superpixel hash keys are generated based on average color value and spatial extent. Best matches are found via a voting system which counts collisions on a simulated hash of a query image's superpixels.
+To run this demo:
+1. Place the header and source files found in ``SDP_HashTable/src`` in your Visual Studio Code project ``src`` folder.
+2. Place the images found in ``SDP_HashTable/src/images`` in your main project folder (2 directories above ``build/Release``.)
+3. Compile and run the program.
+4. Optionally, you may add your own inputs and queries according to the naming scheme. The variables ``int input_count`` and ``int q_count`` must be changed to reflect the correct number of inputs and queries, respectively.
 
 ## SuperDuperPixels
 By: Chandler Calkins
