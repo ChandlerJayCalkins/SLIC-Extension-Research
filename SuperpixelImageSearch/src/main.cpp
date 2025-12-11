@@ -12,51 +12,52 @@
 #include <unordered_set>
 #include <chrono>
 #include <cmath>
-
-#include "json.hpp" // nlohmann::json
-
-// ---- SD-SLIC / SuperDuperPixels ----
+#include <array>
+#include "json.hpp"
 #include "sdp_slic.hpp"
 
 namespace fs = std::filesystem;
 using json   = nlohmann::json;
 
-// ---------- PATH CONFIG ----------
-// Root where the COCO data actually lives
+// PATH CONFIG
 const std::string DATA_ROOT = "C:/SuperpixelImageSearch/data";
-
 const std::string INDEX_DIR = DATA_ROOT + "/coco2017/images/train2017";
 const std::string QUERY_IMG = DATA_ROOT + "/coco2017/images/val2017/000000000139.jpg";
-
-// NOTE: extra "annotations/annotations" here to match your layout
 const std::string TRAIN_ANN = DATA_ROOT + "/coco2017/annotations/annotations/instances_train2017.json";
 const std::string VAL_ANN   = DATA_ROOT + "/coco2017/annotations/annotations/instances_val2017.json";
 
-// ---------- EXPERIMENT CONFIG ----------
-constexpr size_t MAX_IMAGES     = 25;  // how many training images to index
-constexpr bool   USE_ALL_IMAGES = false; // ignore MAX_IMAGES if true
-constexpr int    TOP_K          = 5;     // top-K matches per experiment
+//EXPERIMENT CONFIG
+constexpr size_t MAX_IMAGES     = 10000;
+constexpr bool   USE_ALL_IMAGES = false;
+constexpr int    TOP_K          = 5;
 
-// two cell sizes to test for SUPERPIXEL_SPATIAL
-constexpr int SUPERPIXEL_SIZE_1 = 32;
-constexpr int SUPERPIXEL_SIZE_2 = 128;
+// four cell sizes to test for SUPERPIXEL_SPATIAL
+constexpr int SUPERPIXEL_SIZE_1 = 8;
+constexpr int SUPERPIXEL_SIZE_2 = 32;
+constexpr int SUPERPIXEL_SIZE_3 = 128;
+constexpr int SUPERPIXEL_SIZE_4 = 512;
 
-// fixed resolution used for grid-superpixel descriptors
+constexpr std::array<int, 4> SUPERPIXEL_SIZES = {
+    SUPERPIXEL_SIZE_1,
+    SUPERPIXEL_SIZE_2,
+    SUPERPIXEL_SIZE_3,
+    SUPERPIXEL_SIZE_4
+};
+
 constexpr int SUPERPIXEL_RESIZE_WIDTH  = 256;
 constexpr int SUPERPIXEL_RESIZE_HEIGHT = 256;
 
-// ---- SD-SLIC custom pipeline parameters ----
-constexpr int   SDSLIC_REGION_SIZE        = 100;   // avg superpixel size
-constexpr float SDSLIC_SMOOTHNESS         = 10.0f; // compactness
+// SD-SLIC custom pipeline parameters
+constexpr int   SDSLIC_REGION_SIZE        = 100;
+constexpr float SDSLIC_SMOOTHNESS         = 10.0f;
 constexpr int   SDSLIC_MIN_SIZE_PERCENT   = 4;
 constexpr int   SDSLIC_ITERATIONS         = 10;
 constexpr float SDSLIC_HIST_DISTANCE      = 2.0f;
-constexpr int   SDSLIC_HIST_BUCKETS[3]    = {8, 64, 64}; // L, a, b buckets
-
-// How many regions we force CUSTOM descriptors to use (fixed length)
+constexpr int   SDSLIC_HIST_BUCKETS[3]    = {8, 64, 64};
 constexpr int   CUSTOM_FIXED_REGIONS = 64;
 
-// ---------- ENUMS / BASIC TYPES ----------
+// BASIC TYPES
+
 enum class FeatureType    { SIFT, ORB };
 enum class DescriptorMode { GLOBAL, SUPERPIXEL_SPATIAL, CUSTOM };
 
@@ -73,10 +74,11 @@ std::string descriptorModeToString(DescriptorMode m) {
     }
 }
 
-// ---------- COCO LABEL INDEX ----------
+// DATA INDEXING FOR COCO LABELS
+
 struct COCOLabelIndex {
-    std::unordered_map<std::string, std::unordered_set<int>> imageToCats; // file_name -> cat IDs
-    std::unordered_map<int, std::string> catIdToName;                     // cat ID -> name
+    std::unordered_map<std::string, std::unordered_set<int>> imageToCats;
+    std::unordered_map<int, std::string> catIdToName;
 };
 
 void loadCOCOAnnotations(const std::string& annPath, COCOLabelIndex& index) {
@@ -89,17 +91,15 @@ void loadCOCOAnnotations(const std::string& annPath, COCOLabelIndex& index) {
     json j;
     f >> j;
 
-    // categories
     if (j.contains("categories")) {
-        for (const auto& cat : j["categories"]) {
-            int id = cat.value("id", -1);
-            std::string name = cat.value("name", "");
+        for (const auto& category : j["categories"]) {
+            int id = category.value("id", -1);
+            std::string name = category.value("name", "");
             if (id >= 0 && !name.empty())
                 index.catIdToName[id] = name;
         }
     }
 
-    // images
     std::unordered_map<int, std::string> imageIdToFile;
     if (j.contains("images")) {
         for (const auto& img : j["images"]) {
@@ -110,7 +110,6 @@ void loadCOCOAnnotations(const std::string& annPath, COCOLabelIndex& index) {
         }
     }
 
-    // annotations
     if (j.contains("annotations")) {
         for (const auto& ann : j["annotations"]) {
             int imgId = ann.value("image_id", -1);
@@ -141,8 +140,7 @@ std::string catIdsToString(const std::vector<int>& ids,
     names.reserve(ids.size());
     for (int id : ids) {
         auto it = index.catIdToName.find(id);
-        names.push_back(it != index.catIdToName.end() ? it->second
-                                                      : ("id_" + std::to_string(id)));
+        names.push_back(it != index.catIdToName.end() ? it->second : ("id_" + std::to_string(id)));
     }
     std::sort(names.begin(), names.end());
     std::string out;
@@ -153,7 +151,8 @@ std::string catIdsToString(const std::vector<int>& ids,
     return out;
 }
 
-// ---------- GRID "SUPERPIXELS" ----------
+// GRID SUPERPIXEL GENERATION
+
 void makeGridSuperpixels(const cv::Mat& bgr,
                          cv::Mat& labels,
                          int& numSuperpixels,
@@ -178,7 +177,8 @@ void makeGridSuperpixels(const cv::Mat& bgr,
     numSuperpixels = gridX * gridY;
 }
 
-// ---------- FEATURE EXTRACTION ----------
+// FEATURE EXTRACTION
+
 void computeFeatures(const cv::Mat& gray,
                      FeatureType type,
                      std::vector<cv::KeyPoint>& keypoints,
@@ -233,7 +233,8 @@ std::vector<std::vector<int>> assignKeypointsToSuperpixels(
     return spToIndices;
 }
 
-// ---------- GLOBAL DESCRIPTOR ----------
+// GLOBAL DESCRIPTOR
+
 cv::Mat buildGlobalDescriptor(const cv::Mat& bgr, FeatureType type) {
     CV_Assert(bgr.type() == CV_8UC3);
 
@@ -264,7 +265,8 @@ cv::Mat buildGlobalDescriptor(const cv::Mat& bgr, FeatureType type) {
     return descriptor;
 }
 
-// ---------- REGION DESCRIPTOR (generic, supports fixed region count) ----------
+// REGION DESCRIPTOR
+
 cv::Mat buildRegionDescriptor(const cv::Mat& bgr,
                               const cv::Mat& labels,
                               int numRegions,
@@ -274,20 +276,16 @@ cv::Mat buildRegionDescriptor(const cv::Mat& bgr,
     CV_Assert(labels.type() == CV_32S);
     CV_Assert(bgr.size() == labels.size());
 
-    // grayscale
     cv::Mat gray;
     cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
 
-    // local features
     std::vector<cv::KeyPoint> keypoints;
     cv::Mat desc;
     int descDim = 0;
     computeFeatures(gray, type, keypoints, desc, descDim);
 
-    // global descriptor
     cv::Mat globalFeat = globalDescriptorMean(desc, descDim);
 
-    // global LAB mean
     cv::Mat lab;
     cv::cvtColor(bgr, lab, cv::COLOR_BGR2Lab);
     cv::Scalar labMeanScalar = cv::mean(lab);
@@ -296,7 +294,6 @@ cv::Mat buildRegionDescriptor(const cv::Mat& bgr,
     labMean.at<float>(0, 1) = (float)labMeanScalar[1];
     labMean.at<float>(0, 2) = (float)labMeanScalar[2];
 
-    // assign keypoints to regions
     auto spToIdx = assignKeypointsToSuperpixels(keypoints, labels);
 
     int finalRegions = (fixedNumRegions > 0 ? fixedNumRegions : numRegions);
@@ -313,7 +310,7 @@ cv::Mat buildRegionDescriptor(const cv::Mat& bgr,
         sum.copyTo(regionMeans.row(sp));
     }
 
-    cv::Mat regionFeat = regionMeans.reshape(1, 1); // 1 x (finalRegions * descDim)
+    cv::Mat regionFeat = regionMeans.reshape(1, 1);
 
     int totalDim = globalFeat.cols + 3 + regionFeat.cols;
     cv::Mat descriptor(1, totalDim, CV_32F);
@@ -326,28 +323,27 @@ cv::Mat buildRegionDescriptor(const cv::Mat& bgr,
     return descriptor;
 }
 
-// ---------- SUPERPIXEL-SPATIAL DESCRIPTOR (GRID) ----------
+// SUPERPIXEL-SPATIAL DESCRIPTOR
+
 cv::Mat buildSuperpixelDescriptor(const cv::Mat& bgr,
                                   FeatureType type,
                                   int cellSize) {
     CV_Assert(bgr.type() == CV_8UC3);
     CV_Assert(cellSize > 0);
 
-    // resize to fixed resolution (so all images -> same numSp)
     cv::Mat bgrSmall;
     cv::resize(bgr, bgrSmall,
                cv::Size(SUPERPIXEL_RESIZE_WIDTH, SUPERPIXEL_RESIZE_HEIGHT));
 
-    // grid superpixels
     cv::Mat labels;
     int numSp = 0;
     makeGridSuperpixels(bgrSmall, labels, numSp, cellSize);
 
-    // fixed numRegions = numSp
     return buildRegionDescriptor(bgrSmall, labels, numSp, type, numSp);
 }
 
-// ---------- CUSTOM DESCRIPTOR (SD-SLIC SuperDuperPixels, fixed 64 regions) ----------
+// CUSTOM DESCRIPTOR (SD-SLIC, fixed 64 regions)
+
 cv::Mat buildCustomDescriptor(const cv::Mat& bgr, FeatureType type) {
     CV_Assert(bgr.type() == CV_8UC3);
 
@@ -365,9 +361,7 @@ cv::Mat buildCustomDescriptor(const cv::Mat& bgr, FeatureType type) {
     slic->getLabels(labels);
     int numRegions = slic->getNumberOfSuperpixels();
 
-    // Clamp/merge to a fixed number of regions
     cv::Mat labelsClamped = labels;
-
     if (numRegions > CUSTOM_FIXED_REGIONS) {
         labelsClamped = cv::Mat(labels.size(), CV_32S);
         for (int y = 0; y < labels.rows; ++y) {
@@ -382,16 +376,15 @@ cv::Mat buildCustomDescriptor(const cv::Mat& bgr, FeatureType type) {
         numRegions = CUSTOM_FIXED_REGIONS;
     }
 
-    // Build descriptor using a fixed number of regions (zero-padded if fewer)
     return buildRegionDescriptor(bgr, labelsClamped, numRegions, type, CUSTOM_FIXED_REGIONS);
 }
 
-// ---------- SUPERPIXEL VISUALIZATION (GRID MOSAIC) ----------
+// VISUALS
+
 cv::Mat visualizeGridSuperpixels(const cv::Mat& bgr, int cellSize) {
     CV_Assert(bgr.type() == CV_8UC3);
     CV_Assert(cellSize > 0);
 
-    // work on resized copy (same as descriptor)
     cv::Mat bgrSmall;
     cv::resize(bgr, bgrSmall,
                cv::Size(SUPERPIXEL_RESIZE_WIDTH, SUPERPIXEL_RESIZE_HEIGHT));
@@ -440,13 +433,11 @@ cv::Mat visualizeGridSuperpixels(const cv::Mat& bgr, int cellSize) {
         }
     }
 
-    // upscale back to original query size for nicer display
     cv::Mat mosaicFull;
     cv::resize(mosaic, mosaicFull, bgr.size(), 0, 0, cv::INTER_NEAREST);
     return mosaicFull;
 }
 
-// ---------- SUPERPIXEL VISUALIZATION (SD-SLIC EDGES) ----------
 cv::Mat visualizeSDSLICSuperpixels(const cv::Mat& bgr) {
     CV_Assert(bgr.type() == CV_8UC3);
 
@@ -464,13 +455,12 @@ cv::Mat visualizeSDSLICSuperpixels(const cv::Mat& bgr) {
     slic->getLabelContourMask(contourMask, true);
 
     cv::Mat vis = bgr.clone();
-    // draw contours in red
     vis.setTo(cv::Scalar(0, 0, 255), contourMask);
-
     return vis;
 }
 
-// ---------- HIGH-LEVEL DESCRIPTOR SWITCH ----------
+// DESCRIPTOR BUILDER
+
 cv::Mat buildDescriptor(const cv::Mat& bgr,
                         FeatureType type,
                         DescriptorMode mode,
@@ -486,10 +476,11 @@ cv::Mat buildDescriptor(const cv::Mat& bgr,
     return buildGlobalDescriptor(bgr, type);
 }
 
-// ---------- IN-MEMORY INDEX ----------
+// IMAGE INDEX
+
 struct ImageIndex {
     std::vector<std::string> filenames;
-    cv::Mat features; // rows: images, cols: descriptor dim
+    cv::Mat features;
 
     void add(const std::string& fname, const cv::Mat& desc) {
         if (features.empty()) {
@@ -525,7 +516,8 @@ struct ImageIndex {
     }
 };
 
-// ---------- UTILS ----------
+// OTHER UTILITIES
+
 bool isImageFile(const fs::path& p) {
     if (!p.has_extension()) return false;
     std::string ext = p.extension().string();
@@ -561,43 +553,60 @@ ImageJobResult processImageJob(const std::string& path,
     return r;
 }
 
-// ---------- EXPERIMENT CONFIG ----------
+// CONFIGURATION AND STATS
+
 struct ExperimentConfig {
     FeatureType    feature;
     DescriptorMode mode;
-    int            superpixelCellSize; // 0 for GLOBAL / CUSTOM
-    std::string    name;               // e.g. "SIFT_GLOBAL" or "CUSTOM_SDSLIC_SIFT"
+    int            superpixelCellSize;
+    std::string    name;
 };
 
-// ---------- RUN A SINGLE EXPERIMENT ----------
-void runExperiment(const ExperimentConfig& cfg,
-                   const std::vector<std::string>& imagePaths,
-                   const COCOLabelIndex& cocoIndex,
-                   const cv::Mat& queryImg,
-                   const std::vector<int>& queryCats,
-                   const std::string& queryCatStr,
-                   const std::unordered_set<int>& queryCatSet,
-                   std::ofstream& fout,
-                   const std::string& maxStr) {
+struct ExperimentStats {
+    std::string methodName;
+    std::string featureName;
+    std::string modeName;
+    int         superpixelCellSize = 0;
+    int         gridX = 0;
+    int         gridY = 0;
+    size_t      numIndexed = 0;
+    double      indexTimeMs = 0.0;
+    double      queryTimeMs = 0.0;
+    double      precisionAtK = 0.0;
+    std::string maxStr;
+};
 
-    std::string featureName = featureTypeToString(cfg.feature);
-    std::string modeName    = descriptorModeToString(cfg.mode);
+// EXPERIMENT RUNNER
 
-    std::cout << "\n==============================\n";
-    std::cout << "Experiment: "    << cfg.name  << "\n";
-    std::cout << "Feature type: "  << featureName << "\n";
-    std::cout << "Descriptor:  "   << modeName    << "\n";
+ExperimentStats runExperiment(const ExperimentConfig& cfg,
+                              const std::vector<std::string>& imagePaths,
+                              const COCOLabelIndex& cocoIndex,
+                              const cv::Mat& queryImg,
+                              const std::vector<int>& queryCats,
+                              const std::string& queryCatStr,
+                              const std::unordered_set<int>& queryCatSet,
+                              std::ofstream& fout,
+                              const std::string& maxStr) {
+
+    ExperimentStats stats;
+    stats.featureName        = featureTypeToString(cfg.feature);
+    stats.modeName           = descriptorModeToString(cfg.mode);
+    stats.superpixelCellSize = cfg.superpixelCellSize;
+    stats.maxStr             = maxStr;
+    stats.methodName         = cfg.name + "_" + maxStr;
+
+    std::cout << "\nExperiment: "    << cfg.name  << "\n";
+    std::cout << "Feature type: "  << stats.featureName << "\n";
+    std::cout << "Descriptor:  "   << stats.modeName    << "\n";
+
     if (cfg.mode == DescriptorMode::SUPERPIXEL_SPATIAL)
         std::cout << "Superpixel cell size: " << cfg.superpixelCellSize << "\n";
 
-    // precompute grid size for logging (on resized image)
-    int gridX = 0, gridY = 0;
     if (cfg.mode == DescriptorMode::SUPERPIXEL_SPATIAL) {
-        gridX = (SUPERPIXEL_RESIZE_WIDTH  + cfg.superpixelCellSize - 1) / cfg.superpixelCellSize;
-        gridY = (SUPERPIXEL_RESIZE_HEIGHT + cfg.superpixelCellSize - 1) / cfg.superpixelCellSize;
+        stats.gridX = (SUPERPIXEL_RESIZE_WIDTH  + cfg.superpixelCellSize - 1) / cfg.superpixelCellSize;
+        stats.gridY = (SUPERPIXEL_RESIZE_HEIGHT + cfg.superpixelCellSize - 1) / cfg.superpixelCellSize;
     }
 
-    // ---- parallel indexing ----
     auto t0 = std::chrono::steady_clock::now();
 
     std::vector<ImageJobResult> results(imagePaths.size());
@@ -633,33 +642,31 @@ void runExperiment(const ExperimentConfig& cfg,
     }
 
     auto t1 = std::chrono::steady_clock::now();
-    double indexTimeMs =
+    stats.indexTimeMs =
         std::chrono::duration<double, std::milli>(t1 - t0).count();
+    stats.numIndexed = index.filenames.size();
 
-    std::cout << "Total indexed images: " << index.filenames.size() << "\n";
-    if (index.filenames.empty()) {
+    std::cout << "Total indexed images: " << stats.numIndexed << "\n";
+    if (stats.numIndexed == 0) {
         std::cerr << "No images indexed for " << cfg.name << "\n";
-        return;
+        return stats;
     }
 
-    // ---- query ----
     auto tq0 = std::chrono::steady_clock::now();
     cv::Mat queryDesc = buildDescriptor(queryImg, cfg.feature,
                                         cfg.mode, cfg.superpixelCellSize);
     auto matches = index.search(queryDesc, TOP_K);
     auto tq1 = std::chrono::steady_clock::now();
-    double queryTimeMs =
+    stats.queryTimeMs =
         std::chrono::duration<double, std::milli>(tq1 - tq0).count();
 
     std::cout << "\nTop " << TOP_K << " matches (" << cfg.name << "):\n";
     for (auto& [idx, dist] : matches)
         std::cout << "  " << index.filenames[idx] << "  (dist=" << dist << ")\n";
 
-    // base output dir for this experiment (under SuperpixelImageSearch/output)
     std::string outDir = "../SuperpixelImageSearch/output/" + cfg.name + "_" + maxStr;
     fs::create_directories(outDir);
 
-    // ---- save top-K match images ----
     try {
         std::cout << "\nSaving top " << TOP_K << " matches to: " << outDir << "\n";
         int rank = 1;
@@ -678,7 +685,6 @@ void runExperiment(const ExperimentConfig& cfg,
         std::cerr << "Error saving results for " << cfg.name << ": " << e.what() << "\n";
     }
 
-    // ---- save query + its visualization (for superpixel / custom modes) ----
     if (cfg.mode == DescriptorMode::SUPERPIXEL_SPATIAL) {
         try {
             std::string origPath = outDir + "/query_original.jpg";
@@ -716,12 +722,10 @@ void runExperiment(const ExperimentConfig& cfg,
         }
     }
 
-    // ---- CSV logging ----
     std::string queryFname = fs::path(QUERY_IMG).filename().string();
-    std::string methodName = cfg.name + "_" + maxStr;
-
     int correct = 0;
     int rank = 1;
+
     for (auto& [idx, dist] : matches) {
         const std::string& matchPath = index.filenames[idx];
         std::string matchFname = fs::path(matchPath).filename().string();
@@ -738,14 +742,14 @@ void runExperiment(const ExperimentConfig& cfg,
         }
         if (shareLabel) correct++;
 
-        fout << methodName << ","
-             << featureName << ","
-             << modeName << ","
+        fout << stats.methodName << ","
+             << stats.featureName << ","
+             << stats.modeName << ","
              << cfg.superpixelCellSize << ","
-             << gridX << ","
-             << gridY << ","
+             << stats.gridX << ","
+             << stats.gridY << ","
              << maxStr << ","
-             << index.filenames.size() << ","
+             << stats.numIndexed << ","
              << queryFname << ","
              << "\"" << queryCatStr << "\","
              << rank << ","
@@ -753,26 +757,26 @@ void runExperiment(const ExperimentConfig& cfg,
              << "\"" << matchCatStr << "\","
              << (shareLabel ? 1 : 0) << ","
              << dist << ","
-             << indexTimeMs << ","
-             << queryTimeMs << "\n";
+             << stats.indexTimeMs << ","
+             << stats.queryTimeMs << "\n";
 
         rank++;
     }
 
-    double precisionAtK = (double)correct / (double)TOP_K;
+    stats.precisionAtK = (double)correct / (double)TOP_K;
     std::cout << "Precision@" << TOP_K << " (COCO category match, " << cfg.name
-              << ") = " << precisionAtK << "\n";
+              << ") = " << stats.precisionAtK << "\n";
+
+    return stats;
 }
 
-// ---------- MAIN ----------
-int main(int /*argc*/, char** /*argv*/) {
+// MAIN
+
+int main(int, char**) {
     try {
         std::cout << "Program started.\n";
         std::cout << "Index dir: " << INDEX_DIR << "\n";
         std::cout << "Query img: " << QUERY_IMG << "\n";
-
-        // Optional: disable OpenCL spam if you want
-        // cv::ocl::setUseOpenCL(false);
 
         size_t maxImages = USE_ALL_IMAGES
             ? std::numeric_limits<size_t>::max()
@@ -784,7 +788,6 @@ int main(int /*argc*/, char** /*argv*/) {
 
         std::cout << "Max images: " << maxStr << "\n";
 
-        // COCO annotations
         COCOLabelIndex cocoIndex;
         std::cout << "Loading train annotations...\n";
         loadCOCOAnnotations(TRAIN_ANN, cocoIndex);
@@ -792,7 +795,6 @@ int main(int /*argc*/, char** /*argv*/) {
         loadCOCOAnnotations(VAL_ANN,   cocoIndex);
         std::cout << "Finished loading annotations.\n";
 
-        // collect image paths
         std::vector<std::string> imagePaths;
         for (const auto& entry : fs::directory_iterator(INDEX_DIR)) {
             if (!entry.is_regular_file()) continue;
@@ -807,37 +809,29 @@ int main(int /*argc*/, char** /*argv*/) {
             return 1;
         }
 
-        // load query image
         cv::Mat queryImg = cv::imread(QUERY_IMG, cv::IMREAD_COLOR);
         if (queryImg.empty()) {
             std::cerr << "Could not read query image.\n";
             return 1;
         }
 
-        // ---- origin folder: original + grid + SD-SLIC visualizations ----
+        // origin visualizations
         try {
             std::string originDir = "../SuperpixelImageSearch/output/origin/";
             fs::create_directories(originDir);
 
-            // original
             std::string origPath = originDir + "query_original.jpg";
             if (!cv::imwrite(origPath, queryImg))
                 std::cerr << "Failed to write " << origPath << "\n";
 
-            // grid superpixels (two cell sizes)
-            cv::Mat sp32 = visualizeGridSuperpixels(queryImg, SUPERPIXEL_SIZE_1);
-            std::string sp32Path = originDir + "query_grid_cell" +
-                                   std::to_string(SUPERPIXEL_SIZE_1) + ".jpg";
-            if (!cv::imwrite(sp32Path, sp32))
-                std::cerr << "Failed to write " << sp32Path << "\n";
+            for (int cell : SUPERPIXEL_SIZES) {
+                cv::Mat sp = visualizeGridSuperpixels(queryImg, cell);
+                std::string spPath = originDir + "query_grid_cell" +
+                                     std::to_string(cell) + ".jpg";
+                if (!cv::imwrite(spPath, sp))
+                    std::cerr << "Failed to write " << spPath << "\n";
+            }
 
-            cv::Mat sp64 = visualizeGridSuperpixels(queryImg, SUPERPIXEL_SIZE_2);
-            std::string sp64Path = originDir + "query_grid_cell" +
-                                   std::to_string(SUPERPIXEL_SIZE_2) + ".jpg";
-            if (!cv::imwrite(sp64Path, sp64))
-                std::cerr << "Failed to write " << sp64Path << "\n";
-
-            // SD-SLIC super-duper-pixel edges
             cv::Mat sdslicVis = visualizeSDSLICSuperpixels(queryImg);
             std::string sdPath = originDir + "query_sdslic_hist.jpg";
             if (!cv::imwrite(sdPath, sdslicVis))
@@ -857,7 +851,7 @@ int main(int /*argc*/, char** /*argv*/) {
         else
             std::cout << "Query COCO categories: " << queryCatStr << "\n";
 
-        // CSV output (under SuperpixelImageSearch/output/csv)
+        // CSV output
         std::string csvDir  = "../SuperpixelImageSearch/output/csv/";
         fs::create_directories(csvDir);
         std::string csvFile = csvDir + "master_results.csv";
@@ -874,37 +868,90 @@ int main(int /*argc*/, char** /*argv*/) {
              << "match_rank,match_filename,match_categories,shares_label,distance,"
              << "index_time_ms,query_time_ms\n";
 
-        // define experiments
-        std::vector<ExperimentConfig> experiments = {
-            // Baselines
-            { FeatureType::SIFT, DescriptorMode::GLOBAL,             0,                 "SIFT_GLOBAL" },
-            { FeatureType::ORB,  DescriptorMode::GLOBAL,             0,                 "ORB_GLOBAL" },
+        // experiment configs
+        std::vector<ExperimentConfig> experiments;
+        experiments.push_back({ FeatureType::SIFT, DescriptorMode::GLOBAL, 0, "SIFT_GLOBAL" });
+        experiments.push_back({ FeatureType::ORB,  DescriptorMode::GLOBAL, 0, "ORB_GLOBAL" });
 
-            // Grid-based superpixel spatial
-            { FeatureType::SIFT, DescriptorMode::SUPERPIXEL_SPATIAL, SUPERPIXEL_SIZE_1, "SIFT_SUPERPIXEL_SPATIAL_32" },
-            { FeatureType::SIFT, DescriptorMode::SUPERPIXEL_SPATIAL, SUPERPIXEL_SIZE_2, "SIFT_SUPERPIXEL_SPATIAL_64" },
-            { FeatureType::ORB,  DescriptorMode::SUPERPIXEL_SPATIAL, SUPERPIXEL_SIZE_1, "ORB_SUPERPIXEL_SPATIAL_32" },
-            { FeatureType::ORB,  DescriptorMode::SUPERPIXEL_SPATIAL, SUPERPIXEL_SIZE_2, "ORB_SUPERPIXEL_SPATIAL_64" },
+        for (int cell : SUPERPIXEL_SIZES) {
+            experiments.push_back({
+                FeatureType::SIFT,
+                DescriptorMode::SUPERPIXEL_SPATIAL,
+                cell,
+                "SIFT_SUPERPIXEL_SPATIAL_" + std::to_string(cell)
+            });
+            experiments.push_back({
+                FeatureType::ORB,
+                DescriptorMode::SUPERPIXEL_SPATIAL,
+                cell,
+                "ORB_SUPERPIXEL_SPATIAL_" + std::to_string(cell)
+            });
+        }
 
-            // Custom pipeline: SIFT + SD-SLIC SuperDuperPixels (fixed 64 regions)
-            { FeatureType::SIFT, DescriptorMode::CUSTOM,             0,                 "CUSTOM_SDSLIC_SIFT" }
-        };
+        experiments.push_back({
+            FeatureType::SIFT,
+            DescriptorMode::CUSTOM,
+            0,
+            "CUSTOM_SDSLIC_SIFT"
+        });
 
-        // run all experiments
+        std::vector<ExperimentStats> allStats;
+        allStats.reserve(experiments.size());
+
         for (const auto& cfg : experiments) {
-            runExperiment(cfg,
-                          imagePaths,
-                          cocoIndex,
-                          queryImg,
-                          queryCats,
-                          queryCatStr,
-                          queryCatSet,
-                          fout,
-                          maxStr);
+            auto stats = runExperiment(cfg,
+                                      imagePaths,
+                                      cocoIndex,
+                                      queryImg,
+                                      queryCats,
+                                      queryCatStr,
+                                      queryCatSet,
+                                      fout,
+                                      maxStr);
+            allStats.push_back(stats);
         }
 
         fout.close();
         std::cout << "Master CSV saved to: " << csvFile << "\n";
+
+        // CSV summary
+        std::string summaryFile = csvDir + "summary_results.csv";
+        std::ofstream fsumm(summaryFile);
+        if (!fsumm.is_open()) {
+            std::cerr << "Failed to write summary CSV: " << summaryFile << "\n";
+        } else {
+            fsumm << "method,feature,descriptor_mode,superpixel_cell_size,grid_x,grid_y,"
+                  << "max_images,num_indexed,precision_at_k,"
+                  << "index_time_ms,query_time_ms,"
+                  << "index_time_per_image_ms,query_time_per_image_ms\n";
+
+            for (const auto& s : allStats) {
+                double idxPerImg = (s.numIndexed > 0)
+                    ? (s.indexTimeMs / (double)s.numIndexed)
+                    : 0.0;
+                double qryPerImg = (s.numIndexed > 0)
+                    ? (s.queryTimeMs / (double)s.numIndexed)
+                    : 0.0;
+
+                fsumm << s.methodName << ","
+                      << s.featureName << ","
+                      << s.modeName << ","
+                      << s.superpixelCellSize << ","
+                      << s.gridX << ","
+                      << s.gridY << ","
+                      << s.maxStr << ","
+                      << s.numIndexed << ","
+                      << s.precisionAtK << ","
+                      << s.indexTimeMs << ","
+                      << s.queryTimeMs << ","
+                      << idxPerImg << ","
+                      << qryPerImg << "\n";
+            }
+
+            fsumm.close();
+            std::cout << "Summary CSV saved to: " << summaryFile << "\n";
+        }
+
         std::cout << "Done.\n";
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
